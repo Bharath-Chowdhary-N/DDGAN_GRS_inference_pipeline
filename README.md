@@ -23,32 +23,21 @@ visualization in `visualizations/`:
 
 - Python 3.10, PyTorch 2.x + torchvision (CUDA build recommended but CPU works).
 - `numpy`, `matplotlib`, `tqdm`.
-- A trained checkpoint under `saved_info/dd_gan/<dataset>/<exp>/netG_<epoch_id>.pth`.
+- [Git LFS](https://git-lfs.com/) to fetch the checkpoint (`git lfs install` once per machine, then a normal `git clone`/`git pull` fetches it automatically).
+- A trained checkpoint under `saved_info/dd_gan/<dataset>/<exp>/netG_<epoch_id>.pth`. Only
+  `netG_40.pth` (under `experiment_latest_hasti_60k_corrected_snap43_removed`) is included in
+  this repo, tracked via Git LFS since it's ~569MB; other checkpoints (e.g. `netG_32.pth`) are
+  kept local only and not pushed.
 - A combined properties `.txt` file (see below) with the 4 conditioning parameters
   per training sample, used to pick conditioning values for generation.
 
-## Preparing the properties file (one-time)
+## Properties file
 
-Conditioning values are drawn from the training set's parameters. Rather than
-committing the full `GRS_cut_snap_43_removed/properties/` directory (60k+
-individual `.npy` files, ~240 MB) to git, combine it into one `.txt` file:
-
-```bash
-python convert_properties_to_txt.py \
-  --properties_dir GRS_cut_snap_43_removed/properties \
-  --output properties_grs_cut.txt
-```
-
-This writes `properties_grs_cut.txt` (one row per sample: `z logM* SFR
-logL_Halpha`), a few MB instead of hundreds. `test_generation_2_channel.py`
+Conditioning values are drawn from the training set's parameters, stored in
+`properties_grs_cut.txt` (one row per sample: `z logM* SFR logL_Halpha`) rather
+than as 60k+ individual per-sample `.npy` files. `test_generation_2_channel.py`
 reads conditioning parameters from this file via `--properties_txt` (default
-`properties_grs_cut.txt`) and no longer needs the per-file directory at all.
-
-Once `properties_grs_cut.txt` is generated and you've confirmed it looks right
-(e.g. with the sanity check below), `GRS_cut_snap_43_removed/` can be deleted —
-just keep a backup elsewhere first, since regenerating that directory from
-scratch (if the original per-cube pipeline isn't reproducible on demand) may
-not be possible.
+`properties_grs_cut.txt`).
 
 ```bash
 python3 -c "
@@ -61,7 +50,7 @@ print(a[0])       # first row: z, logM*, SFR, logL_Halpha
 
 ## Usage
 
-Run from the repo root (`DDGAN_GRS_pipeline/`):
+Run from the repo root (`DDGAN_GRS_inference_pipeline/`):
 
 ```bash
 python test_generation_2_channel.py \
@@ -82,10 +71,11 @@ python test_generation_2_channel.py \
 This generates 100 continuum samples into `generated_continuum/`, with the
 first 20 also rendered as PNGs. `--image_size`, `--ch_mult`, and `--epoch_id`
 must match whatever architecture/checkpoint you're loading — the values above
-are verified working for both `netG_40.pth` and `netG_32.pth` under
-`experiment_latest_hasti_60k_corrected_snap43_removed`. Other checkpoints/experiments
-may need different `--ch_mult`/`--num_channels_dae` values and will fail to load
-with a `size mismatch` / missing-key error otherwise.
+are verified working for `netG_40.pth` under
+`experiment_latest_hasti_60k_corrected_snap43_removed` (the only checkpoint
+included in this repo). Other checkpoints/experiments may need different
+`--ch_mult`/`--num_channels_dae` values and will fail to load with a
+`size mismatch` / missing-key error otherwise.
 
 ### Key arguments
 

@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+
+# Only netG_40.pth (tracked via Git LFS, see .gitattributes) is pushed;
+# other checkpoints in this experiment stay local.
+saved_info/dd_gan/custom_conditional/experiment_latest_hasti_60k_corrected_snap43_removed/netG_32.pth
+
+# Generated sample outputs - regenerable via test_generation_2_channel.py, not source
+generated_continuum/
+
+# Redundant duplicate of param_stats_grs_cut.npz (unused by any script)
+param_stats_grs_cut/
+
+# Local scratch/preview artifacts
+floor_preview/
+
+# Local tool settings
+.claude/
