@@ -25,7 +25,7 @@ visualization in `visualizations/`:
 - `numpy`, `matplotlib`, `tqdm`.
 - [Git LFS](https://git-lfs.com/) to fetch the checkpoint (`git lfs install` once per machine, then a normal `git clone`/`git pull` fetches it automatically).
 - A trained checkpoint under `saved_info/dd_gan/<dataset>/<exp>/netG_<epoch_id>.pth`. Only
-  `netG_80.pth` (under `experiment_latest_hasti_60k_corrected_snap43_removed`) is included in
+  `netG_104.pth` (under `experiment_latest_hasti_60k_corrected_snap43_removed`) is included in
   this repo, tracked via Git LFS since it's ~569MB; other checkpoints (e.g. `netG_32.pth`) are
   kept local only and not pushed.
 - A combined properties `.txt` file (see below) with the 4 conditioning parameters
@@ -56,7 +56,7 @@ Run from the repo root (`DDGAN_GRS_inference_pipeline/`):
 python test_generation_2_channel.py \
   --exp experiment_latest_hasti_60k_corrected_snap43_removed \
   --dataset custom_conditional \
-  --epoch_id 80 \
+  --epoch_id 104 \
   --num_channels 2 \
   --image_size 256 \
   --ch_mult 1 1 2 2 4 4 \
@@ -71,7 +71,7 @@ python test_generation_2_channel.py \
 This generates 100 continuum samples into `generated_continuum/`, with the
 first 20 also rendered as PNGs. `--image_size`, `--ch_mult`, and `--epoch_id`
 must match whatever architecture/checkpoint you're loading — the values above
-are verified working for `netG_80.pth` under
+are verified working for `netG_104.pth` under
 `experiment_latest_hasti_60k_corrected_snap43_removed` (the only checkpoint
 included in this repo). Other checkpoints/experiments may need different
 `--ch_mult`/`--num_channels_dae` values and will fail to load with a
