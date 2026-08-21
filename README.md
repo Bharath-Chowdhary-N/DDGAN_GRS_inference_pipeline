@@ -25,7 +25,7 @@ visualization in `visualizations/`:
 - `numpy`, `matplotlib`, `tqdm`.
 - [Git LFS](https://git-lfs.com/) to fetch the checkpoint (`git lfs install` once per machine, then a normal `git clone`/`git pull` fetches it automatically).
 - A trained checkpoint under `saved_info/dd_gan/<dataset>/<exp>/netG_<epoch_id>.pth`. Only
-  `netG_104.pth` (under `experiment_latest_hasti_60k_corrected_snap43_removed`) is included in
+  `netG_122.pth` (under `experiment_latest_hasti_60k_corrected_snap43_removed`) is included in
   this repo, tracked via Git LFS since it's ~569MB; other checkpoints (e.g. `netG_32.pth`) are
   kept local only and not pushed.
 - A combined properties `.txt` file (see below), used to determine each
@@ -89,7 +89,7 @@ Run from the repo root (`DDGAN_GRS_inference_pipeline/`):
 python test_generation_2_channel.py \
   --exp experiment_latest_hasti_60k_corrected_snap43_removed \
   --dataset custom_conditional \
-  --epoch_id 104 \
+  --epoch_id 122 \
   --num_channels 2 \
   --image_size 256 \
   --ch_mult 1 1 2 2 4 4 \
@@ -105,7 +105,7 @@ This generates one continuum sample per row of `param.csv` into
 `generated_continuum/`, with the first `--num_visualize` also rendered as
 PNGs. `--image_size`, `--ch_mult`, and `--epoch_id` must match whatever
 architecture/checkpoint you're loading — the values above are verified
-working for `netG_104.pth` under
+working for `netG_122.pth` under
 `experiment_latest_hasti_60k_corrected_snap43_removed` (the only checkpoint
 included in this repo). Other checkpoints/experiments may need different
 `--ch_mult`/`--num_channels_dae` values and will fail to load with a
@@ -120,7 +120,7 @@ included in this repo). Other checkpoints/experiments may need different
 | `--num_visualize` | How many of the generated samples (from the start of the run) also get a PNG in `visualizations/`. Every sample still gets a `.npy` regardless of this setting. |
 | `--exp`, `--dataset`, `--epoch_id` | Select which checkpoint to load, from `saved_info/dd_gan/<dataset>/<exp>/netG_<epoch_id>.pth`. |
 | `--properties_txt` | Combined `.txt` file of training conditioning parameters (see above); used to determine each parameter's valid `[min, max]` range and as the normalization-bounds fallback. |
-| `--stats_path` | Precomputed normalization stats (`.npz` from `compute_param_stats.py`, log-SFR transformed). Use this if the checkpoint was trained with that normalization — required for `netG_104.pth`. |
+| `--stats_path` | Precomputed normalization stats (`.npz` from `compute_param_stats.py`, log-SFR transformed). Use this if the checkpoint was trained with that normalization — required for `netG_122.pth`. |
 | `--stats_log` / `--param_mins` / `--param_maxs` | Legacy alternatives to `--stats_path` for older checkpoints — see the docstrings in the script for when each applies. |
 | `--variation_percent` | Randomly perturb each conditioning parameter from `param.csv` by up to +/- this percent (clipped to the training set's min/max) before generating. `0` (default) uses the CSV values unmodified. |
 | `--image_size`, `--num_timesteps`, model architecture flags | Must match the values used at training time for the chosen checkpoint. |
