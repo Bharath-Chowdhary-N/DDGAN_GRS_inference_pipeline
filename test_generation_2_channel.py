@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import csv
 import re
 import torch
 import numpy as np
@@ -244,6 +245,58 @@ def apply_percent_variation(base_params, variation_percent, param_mins, param_ma
     varied = np.clip(varied, param_mins, param_maxs)
     return varied
 
+def load_params_from_csv(csv_path, phys_mins, phys_maxs):
+    """Load conditioning parameters (one row per sample to generate: z, logM*,
+    SFR, logL_Halpha, in that order and in physical units) from a CSV file.
+
+    The CSV's first row is a header of "<name> [<units>]" (params that are
+    already log quantities, e.g. logM*/logL_Halpha, carry "log" in the name
+    itself rather than in the units). Every value is validated against
+    [phys_mins, phys_maxs] - the range actually observed in the training set
+    (see load_training_parameters) - since asking the generator to condition
+    on values outside that range means extrapolating beyond what it was
+    trained on.
+    """
+    if not Path(csv_path).exists():
+        raise FileNotFoundError(f"Parameter CSV not found: {csv_path}")
+
+    with open(csv_path, newline='') as f:
+        reader = csv.reader(f)
+        rows = [row for row in reader if row]
+
+    if len(rows) < 2:
+        raise ValueError(f"{csv_path} must have a header row plus at least one data row")
+
+    header, data_rows = rows[0], rows[1:]
+    if len(header) != len(PARAM_NAMES):
+        raise ValueError(
+            f"{csv_path} header has {len(header)} columns {header}, "
+            f"expected {len(PARAM_NAMES)} (order: {PARAM_NAMES})")
+
+    try:
+        params = np.array([[float(v) for v in row] for row in data_rows], dtype=np.float64)
+    except ValueError as e:
+        raise ValueError(f"Non-numeric value found in {csv_path}: {e}")
+
+    below = params < phys_mins
+    above = params > phys_maxs
+    out_of_range = below | above
+    if out_of_range.any():
+        problems = []
+        for r, c in zip(*np.where(out_of_range)):
+            problems.append(
+                f"  row {r + 2}, column '{header[c]}': {params[r, c]} not in "
+                f"[{phys_mins[c]:.6f}, {phys_maxs[c]:.6f}]")
+        raise ValueError(
+            f"{csv_path} contains parameter values outside the training data "
+            f"range:\n" + "\n".join(problems))
+
+    print(f"\nLoaded {len(params)} parameter rows from {csv_path}")
+    print(f"Columns: {header}")
+
+    return params
+
+
 def save_image_numpy(image_tensor, image_idx, output_dir):
     """Save the continuum channel (channel 1) only, as a (H, W) numpy array.
 
@@ -394,42 +447,36 @@ def generate_test_samples(args):
     T = get_time_schedule(args, device)
     pos_coeff = Posterior_Coefficients(args, device)
 
-    # Use existing training parameters with optional variation
-    num_train_samples = len(all_train_params)
+    # Load conditioning parameters from the CSV file (one row per sample to
+    # generate). Values are validated against the training set's per-parameter
+    # [min, max] inside load_params_from_csv.
+    csv_params = load_params_from_csv(args.params_csv, phys_mins, phys_maxs)
 
-    if args.num_samples > num_train_samples:
-        print(f"Warning: Requested {args.num_samples} samples but only {num_train_samples} training samples available.")
-        print(f"Will generate {num_train_samples} samples.")
-        num_samples = num_train_samples
-    else:
-        num_samples = args.num_samples
+    if args.num_samples < len(csv_params):
+        print(f"\n--num_samples={args.num_samples} is fewer than the "
+              f"{len(csv_params)} rows in {args.params_csv}; using only the "
+              f"first {args.num_samples} rows.")
+        csv_params = csv_params[:args.num_samples]
+
+    num_samples = len(csv_params)
 
     print(f"\n{'='*60}")
-    print(f"Using existing training parameters")
+    print(f"Using parameters from {args.params_csv}")
     print(f"Variation: {args.variation_percent}%")
     print(f"{'='*60}\n")
 
-    # Randomly select samples from training data (or use first N samples)
     np.random.seed(args.seed)
-    if args.use_sequential:
-        # Use first N samples sequentially
-        selected_indices = np.arange(num_samples)
-        print(f"Using first {num_samples} training samples sequentially")
-    else:
-        # Randomly select N samples
-        selected_indices = np.random.choice(num_train_samples, size=num_samples, replace=False)
-        print(f"Randomly selected {num_samples} training samples")
 
-    base_params = all_train_params[selected_indices]
-
-    # Randomly vary each parameter independently by up to +/- variation_percent%,
-    # then clip to the training set's per-parameter [min, max] (physical units)
-    # so varied values never fall outside the range seen during training.
-    test_params_original = apply_percent_variation(base_params, args.variation_percent,
+    # Optionally randomly vary each parameter independently by up to
+    # +/- variation_percent%, then clip to the training set's per-parameter
+    # [min, max] (physical units) so varied values never fall outside the
+    # range seen during training. With the default 0%, values are used as-is.
+    test_params_original = apply_percent_variation(csv_params, args.variation_percent,
                                                      phys_mins, phys_maxs)
 
-    print(f"\nApplied random +/-{args.variation_percent}% variation per parameter "
-          f"(each clipped to its training min/max)")
+    if args.variation_percent > 0:
+        print(f"\nApplied random +/-{args.variation_percent}% variation per parameter "
+              f"(each clipped to its training min/max)")
 
     # Turn physical-unit parameters into the model's conditioning input.
     test_params_normalized = normalize_fn(test_params_original)
@@ -457,7 +504,7 @@ def generate_test_samples(args):
         "num_channels": args.num_channels,
         "image_size": args.image_size,
         "variation_percent": args.variation_percent,
-        "selection_mode": "sequential" if args.use_sequential else "random",
+        "params_csv": args.params_csv,
         "normalization_source": normalization_source,
         "original_ranges": {
             "param1": [float(phys_mins[0]), float(phys_maxs[0])],
@@ -526,7 +573,6 @@ def generate_test_samples(args):
         if idx % 100 == 0 or idx < 10 or idx >= num_samples - 10:
             param_info["test_samples"].append({
                 "index": idx,
-                "training_index": int(selected_indices[idx]),
                 "normalized_params": norm_params.tolist(),
                 "original_params": orig_params.tolist(),
                 "image_file": f"images/image_{idx}.npy",
@@ -595,8 +641,15 @@ if __name__ == '__main__':
                              'z, logM*, SFR, logL_Halpha), produced by convert_properties_to_txt.py')
     parser.add_argument('--output_dir', type=str, default='../GRS/generated',
                         help='directory to save generated samples')
+    parser.add_argument('--params_csv', type=str, default='param.csv',
+                        help='CSV file with one row per sample to generate: header is '
+                             '"<param name> [<units>]" (log quantities carry "log" in the '
+                             'name), columns in order z, logM*, SFR, logL_Halpha, values in '
+                             'physical units. Every value must lie within the training set\'s '
+                             'observed [min, max] for that parameter.')
     parser.add_argument('--num_samples', type=int, default=1000,
-                        help='number of samples to generate')
+                        help='cap on how many rows of --params_csv to use (defaults to using '
+                             'every row)')
 
     # Normalization-bounds override (see param_normalization.py for why this matters:
     # --properties_txt alone does not reproduce what a given checkpoint was actually
@@ -627,8 +680,6 @@ if __name__ == '__main__':
                         help='each parameter of each selected training sample is randomly varied by '
                              'up to +/- this percent (independently, not a uniform shrink), then '
                              'clipped to that parameter\'s [min, max] over the whole training set')
-    parser.add_argument('--use_sequential', action='store_true', default=False,
-                        help='if set, use first N training samples sequentially instead of random selection')
     parser.add_argument('--num_visualize', type=int, default=20,
                         help='number of generated samples (from the start of the run) to also save as '
                              'PNG visualizations, in addition to the .npy saved for every sample')
