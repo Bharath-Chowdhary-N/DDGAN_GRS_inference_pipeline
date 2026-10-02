@@ -131,7 +131,7 @@ def sample_from_model(coefficients, generator, n_time, x_init, T, opt, param_val
 
     return x
 
-def load_training_parameters(properties_txt="properties_grs_cut.txt"):
+def load_training_parameters(properties_txt="properties_highres_cut_snap43_removed.txt"):
     """Load all training parameters (one row per sample: z, logM*, SFR,
     logL_Halpha) from a combined .txt file and analyze their distribution.
 
@@ -298,26 +298,22 @@ def load_params_from_csv(csv_path, phys_mins, phys_maxs):
 
 
 def save_image_numpy(image_tensor, image_idx, output_dir):
-    """Save the continuum channel (channel 1) only, as a (H, W) numpy array.
-
-    The generator itself still produces both channels (channel 0 = H-alpha,
-    channel 1 = continuum); channel 0 is discarded here and never written out.
-    """
+    """Save both generated channels as a (2, H, W) numpy array
+    (channel 0 = H-alpha, channel 1 = continuum)."""
     img_np = image_tensor.cpu().numpy()
 
     if img_np.shape[0] != 2:
         print(f"WARNING: Expected 2 channels from the generator, got shape {img_np.shape}")
 
-    continuum = img_np[1]
-
     # Save as numpy
     img_path = os.path.join(output_dir, "images", f"image_{image_idx}.npy")
-    np.save(img_path, continuum)
+    np.save(img_path, img_np)
 
     # Print channel statistics for debugging
     if image_idx < 5:  # Only for first few images
-        print(f"\nImage {image_idx} continuum statistics:")
-        print(f"  min={continuum.min():.4f}, max={continuum.max():.4f}, mean={continuum.mean():.4f}")
+        for c, name in enumerate(['H-alpha', 'continuum']):
+            print(f"\nImage {image_idx} {name} statistics:")
+            print(f"  min={img_np[c].min():.4f}, max={img_np[c].max():.4f}, mean={img_np[c].mean():.4f}")
 
     return img_path
 
@@ -329,18 +325,19 @@ def save_property_numpy(params, property_idx, output_dir):
     return prop_path
 
 def visualize_2channel_sample(image_tensor, params, output_dir, idx):
-    """Single-panel visualization of the continuum channel (channel 1), gray_r auto-scaled."""
+    """Two-panel visualization (H-alpha = channel 0, continuum = channel 1), gray_r auto-scaled."""
     img_np = image_tensor.cpu().numpy() if hasattr(image_tensor, 'cpu') else image_tensor
 
     param_names = [r'$z$', r'$\log M_\star$', r'SFR', r'$\log L_{H\alpha}$']
     param_str = ',  '.join(f'{n} = {v:.3f}' for n, v in zip(param_names, params))
 
-    fig, ax = plt.subplots(1, 1, figsize=(4.5, 4))
+    fig, axes = plt.subplots(1, 2, figsize=(9, 4))
 
-    im = ax.imshow(img_np[1], cmap='gray_r')
-    ax.set_title('Continuum', fontsize=12)
-    ax.axis('off')
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    for c, (ax, title) in enumerate(zip(axes, ['H-alpha', 'Continuum'])):
+        im = ax.imshow(img_np[c], cmap='gray_r')
+        ax.set_title(title, fontsize=12)
+        ax.axis('off')
+        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     fig.suptitle(param_str, fontsize=10, y=1.02)
     plt.tight_layout()
@@ -563,7 +560,7 @@ def generate_test_samples(args):
             viz_path = visualize_2channel_sample(fake_sample[0], orig_params, output_base, idx)
             print(f"  Saved → {viz_path}")
 
-        # Save continuum channel (channel 1) as numpy (shape: H, W); channel 0 (H-alpha) is discarded
+        # Save both channels as numpy (shape: 2, H, W; channel 0 = H-alpha, channel 1 = continuum)
         img_path = save_image_numpy(fake_sample[0], idx, output_base)
 
         # Save properties as numpy (original scale)
@@ -583,8 +580,8 @@ def generate_test_samples(args):
     with open(os.path.join(output_base, "test_info.json"), 'w') as f:
         json.dump(param_info, f, indent=2)
 
-    print(f"\n✓ Successfully generated {num_samples} continuum samples")
-    print(f"✓ Images saved to {output_base}/images/ (shape: {args.image_size}, {args.image_size}; channel 0/H-alpha discarded)")
+    print(f"\n✓ Successfully generated {num_samples} 2-channel samples")
+    print(f"✓ Images saved to {output_base}/images/ (shape: 2, {args.image_size}, {args.image_size}; channel 0 = H-alpha, channel 1 = continuum)")
     print(f"✓ Properties saved to {output_base}/properties/")
     print(f"✓ Visualizations saved to {output_base}/visualizations/ (first {min(args.num_visualize, num_samples)} samples)")
     print(f"✓ Test information saved to test_info.json")
@@ -636,7 +633,7 @@ if __name__ == '__main__':
     parser.add_argument('--param_emb_dim', type=int, default=128)
 
     # Input/Output settings
-    parser.add_argument('--properties_txt', type=str, default='properties_grs_cut.txt',
+    parser.add_argument('--properties_txt', type=str, default='properties_highres_cut_snap43_removed.txt',
                         help='combined .txt file of training properties (one row per sample: '
                              'z, logM*, SFR, logL_Halpha), produced by convert_properties_to_txt.py')
     parser.add_argument('--output_dir', type=str, default='../GRS/generated',

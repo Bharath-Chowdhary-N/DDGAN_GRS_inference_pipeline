@@ -1,9 +1,9 @@
 __pycache__/
 *.pyc
 
-# Only netG_40.pth (tracked via Git LFS, see .gitattributes) is pushed;
+# Only netG_70.pth (tracked via Git LFS, see .gitattributes) is pushed;
 # other checkpoints in this experiment stay local.
-saved_info/dd_gan/custom_conditional/experiment_latest_hasti_60k_corrected_snap43_removed/netG_32.pth
+saved_info/dd_gan/custom_conditional/experiment_latest_hasti_60k_high_res_snap43_removed/netG_62.pth
 
 # Generated sample outputs - regenerable via test_generation_2_channel.py, not source
 generated_continuum/
