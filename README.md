@@ -24,7 +24,7 @@ visualization in `visualizations/`:
 - `numpy`, `matplotlib`, `tqdm`.
 - [Git LFS](https://git-lfs.com/) to fetch the checkpoint (`git lfs install` once per machine, then a normal `git clone`/`git pull` fetches it automatically).
 - A trained checkpoint under `saved_info/dd_gan/<dataset>/<exp>/netG_<epoch_id>.pth`. Only
-  `netG_70.pth` (under `experiment_latest_hasti_60k_high_res_snap43_removed`) is the supported
+  `netG_104.pth` (under `experiment_latest_hasti_60k_high_res_snap43_removed`) is the supported
   checkpoint for this repo (~569MB, intended to be tracked via Git LFS); other checkpoints are
   kept local only and not pushed.
 - A combined properties `.txt` file (see below), used to determine each
@@ -35,7 +35,7 @@ visualization in `visualizations/`:
 
 ## Properties file
 
-`properties_highres_cut_snap43_removed.txt` (for `netG_70.pth`; built with
+`properties_highres_cut_snap43_removed.txt` (for `netG_104.pth`; built with
 `convert_properties_to_txt.py --properties_dir <processed_new_highres_halpha_cut_snap43_removed/properties> --output properties_highres_cut_snap43_removed.txt`;
 the older `properties_grs_cut.txt` belongs to `netG_122.pth`) (one row per training sample: `z logM* SFR
 logL_Halpha`) is the training set's full parameter distribution, used by
@@ -91,7 +91,7 @@ Run from the repo root (`DDGAN_GRS_inference_pipeline/`):
 python test_generation_2_channel.py \
   --exp experiment_latest_hasti_60k_high_res_snap43_removed \
   --dataset custom_conditional \
-  --epoch_id 70 \
+  --epoch_id 104 \
   --num_channels 2 \
   --image_size 256 \
   --ch_mult 1 1 2 2 4 4 \
@@ -107,15 +107,15 @@ This generates one 2-channel sample per row of `param.csv` into
 `generated_continuum/`, with the first `--num_visualize` also rendered as
 PNGs. `--image_size`, `--ch_mult`, and `--epoch_id` must match whatever
 architecture/checkpoint you're loading — the values above are verified
-working for `netG_70.pth` under
+working for `netG_104.pth` under
 `experiment_latest_hasti_60k_high_res_snap43_removed`. Other checkpoints/experiments
 may need different `--ch_mult`/`--num_channels_dae` values and will fail to load with a
 `size mismatch` / missing-key error otherwise.
 
-The normalization stats must also match the checkpoint: `netG_70.pth` was trained with
+The normalization stats must also match the checkpoint: `netG_104.pth` was trained with
 `param_stats_highres_cut_snap43_removed.npz` (log-SFR transformed; logL_Halpha range
 ≈ 3.53–10.31). The older `param_stats_grs_cut.npz` belongs to the previous
-`netG_122.pth` checkpoint and will give wrongly-scaled conditioning with `netG_70.pth`.
+`netG_122.pth` checkpoint and will give wrongly-scaled conditioning with `netG_104.pth`.
 
 > **Note:** `--properties_txt` now defaults to `properties_highres_cut_snap43_removed.txt`
 > (60305 rows, logL_Halpha ≈ 3.53–10.31), matching `param_stats_highres_cut_snap43_removed.npz`.
@@ -131,7 +131,7 @@ The normalization stats must also match the checkpoint: `netG_70.pth` was traine
 | `--num_visualize` | How many of the generated samples (from the start of the run) also get a PNG in `visualizations/`. Every sample still gets a `.npy` regardless of this setting. |
 | `--exp`, `--dataset`, `--epoch_id` | Select which checkpoint to load, from `saved_info/dd_gan/<dataset>/<exp>/netG_<epoch_id>.pth`. |
 | `--properties_txt` | Combined `.txt` file of training conditioning parameters (see above); used to determine each parameter's valid `[min, max]` range and as the normalization-bounds fallback. |
-| `--stats_path` | Precomputed normalization stats (`.npz` from `compute_param_stats.py`, log-SFR transformed). Use this if the checkpoint was trained with that normalization — required for `netG_70.pth` (use `param_stats_highres_cut_snap43_removed.npz`). |
+| `--stats_path` | Precomputed normalization stats (`.npz` from `compute_param_stats.py`, log-SFR transformed). Use this if the checkpoint was trained with that normalization — required for `netG_104.pth` (use `param_stats_highres_cut_snap43_removed.npz`). |
 | `--stats_log` / `--param_mins` / `--param_maxs` | Legacy alternatives to `--stats_path` for older checkpoints — see the docstrings in the script for when each applies. |
 | `--variation_percent` | Randomly perturb each conditioning parameter from `param.csv` by up to +/- this percent (clipped to the training set's min/max) before generating. `0` (default) uses the CSV values unmodified. |
 | `--image_size`, `--num_timesteps`, model architecture flags | Must match the values used at training time for the chosen checkpoint. |

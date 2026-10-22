@@ -591,7 +591,7 @@ if __name__ == '__main__':
 
     # Model parameters (should match training)
     parser.add_argument('--seed', type=int, default=1024)
-    parser.add_argument('--epoch_id', type=int, default=300,
+    parser.add_argument('--epoch_id', type=int, default=104,
                         help='which checkpoint to use')
     parser.add_argument('--num_channels', type=int, default=2,  # FIXED: Changed from 1 to 2
                         help='channel of image (MUST be 2 for 2-channel generation)')
@@ -620,11 +620,11 @@ if __name__ == '__main__':
     parser.add_argument('--not_use_tanh', action='store_true', default=False)
 
     # Experiment settings
-    parser.add_argument('--exp', default='experiment_npy_18k',
+    parser.add_argument('--exp', default='experiment_latest_hasti_60k_high_res_snap43_removed',
                         help='experiment name (should match training)')
     parser.add_argument('--dataset', default='custom_conditional',
                         help='dataset name (should match training)')
-    parser.add_argument('--image_size', type=int, default=128,  # FIXED: Changed from 32 to 128
+    parser.add_argument('--image_size', type=int, default=256,
                         help='image size during training')
     parser.add_argument('--nz', type=int, default=100)
     parser.add_argument('--num_timesteps', type=int, default=4)
