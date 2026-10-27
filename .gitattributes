@@ -1,1 +1,2 @@
 saved_info/dd_gan/custom_conditional/experiment_latest_hasti_60k_high_res_snap43_removed/netG_104.pth filter=lfs diff=lfs merge=lfs -text
+filter_models/*.pt filter=lfs diff=lfs merge=lfs -text

@@ -444,6 +444,16 @@ def generate_test_samples(args):
     T = get_time_schedule(args, device)
     pos_coeff = Posterior_Coefficients(args, device)
 
+    galaxy_filter = None
+    if args.filter:
+        from galaxy_filter import GalaxyFilter
+        galaxy_filter = GalaxyFilter(args.filter_model_dir, device=device, threshold=args.filter_threshold)
+        for sub in ("images", "properties"):
+            os.makedirs(os.path.join(output_base, "rejected", sub), exist_ok=True)
+        filter_rows = []
+        print(f"Filter on: rejecting samples with fidelity > {args.filter_threshold} "
+              f"(up to {args.filter_retries} retries per row)")
+
     # Load conditioning parameters from the CSV file (one row per sample to
     # generate). Values are validated against the training set's per-parameter
     # [min, max] inside load_params_from_csv.
@@ -531,15 +541,32 @@ def generate_test_samples(args):
         # Get original scale parameters
         orig_params = test_params_original[idx]
 
-        # Initialize with random noise - CRITICAL: must be 2 channels!
-        x_t_1 = torch.randn(1, args.num_channels, args.image_size, args.image_size).to(device)
+        for attempt in range(1 + (args.filter_retries if galaxy_filter is not None else 0)):
+            # Initialize with random noise - CRITICAL: must be 2 channels!
+            x_t_1 = torch.randn(1, args.num_channels, args.image_size, args.image_size).to(device)
 
-        # Generate sample
-        fake_sample = sample_from_model(pos_coeff, netG, args.num_timesteps, x_t_1, T, args, param_tensor)
+            # Generate sample
+            fake_sample = sample_from_model(pos_coeff, netG, args.num_timesteps, x_t_1, T, args, param_tensor)
 
-        # Denormalize [-1, 1] → [0, 1] to match original data range
-        fake_sample = (fake_sample + 1.0) / 2.0
-        fake_sample = fake_sample.clamp(0.0, 1.0)
+            # Denormalize [-1, 1] → [0, 1] to match original data range
+            fake_sample = (fake_sample + 1.0) / 2.0
+            fake_sample = fake_sample.clamp(0.0, 1.0)
+
+            if galaxy_filter is None:
+                break
+            fidelity, pred = galaxy_filter.score(fake_sample.cpu().numpy(), orig_params)
+            passed = fidelity[0] <= args.filter_threshold
+            if passed:
+                break
+
+        if galaxy_filter is not None:
+            filter_rows.append([idx, *orig_params, *pred[0, 1:], fidelity[0], attempt + 1, int(passed)])
+            if not passed:
+                np.save(os.path.join(output_base, "rejected", "images", f"image_{idx}.npy"),
+                        fake_sample[0].cpu().numpy())
+                np.save(os.path.join(output_base, "rejected", "properties", f"property_{idx}.npy"),
+                        orig_params)
+                continue
 
         # Verify output shape
         expected_shape = (1, args.num_channels, args.image_size, args.image_size)
@@ -575,6 +602,19 @@ def generate_test_samples(args):
                 "image_file": f"images/image_{idx}.npy",
                 "property_file": f"properties/property_{idx}.npy"
             })
+
+    if galaxy_filter is not None:
+        with open(os.path.join(output_base, "filter_results.csv"), 'w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(["index", "z", "logM*", "SFR", "logL_Halpha", "pred_logM*", "pred_log10_SFR",
+                        "pred_logL_Halpha", "fidelity", "attempts", "passed"])
+            for r in filter_rows:
+                w.writerow([r[0]] + [f"{v:.4f}" for v in r[1:9]] + r[9:])
+        n_rej = sum(1 for r in filter_rows if not r[-1])
+        param_info["filter"] = {"threshold": args.filter_threshold, "retries": args.filter_retries,
+                                "passed": len(filter_rows) - n_rej, "rejected": n_rej}
+        print(f"\nFilter: {len(filter_rows) - n_rej}/{len(filter_rows)} passed, {n_rej} rejected "
+              f"(saved to {output_base}/rejected/; scores in filter_results.csv)")
 
     # Save parameter info to JSON
     with open(os.path.join(output_base, "test_info.json"), 'w') as f:
@@ -680,6 +720,18 @@ if __name__ == '__main__':
     parser.add_argument('--num_visualize', type=int, default=20,
                         help='number of generated samples (from the start of the run) to also save as '
                              'PNG visualizations, in addition to the .npy saved for every sample')
+
+    # Post-generation filter (galaxy_filter.py)
+    parser.add_argument('--filter', action='store_true',
+                        help='reject generated galaxies that do not look like their requested parameters '
+                             '(regression-ensemble fidelity score, see galaxy_filter.py); rejected samples '
+                             'go to <output_dir>/rejected/ and every score to filter_results.csv')
+    parser.add_argument('--filter_threshold', type=float, default=4.0,
+                        help='maximum fidelity score to keep a sample (real test images average ~1.5)')
+    parser.add_argument('--filter_retries', type=int, default=0,
+                        help='redraw the noise up to this many times for a rejected row before giving up')
+    parser.add_argument('--filter_model_dir', type=str, default='filter_models',
+                        help='directory with the regression ensemble checkpoints used by --filter')
 
     args = parser.parse_args()
 

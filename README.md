@@ -21,8 +21,9 @@ visualization in `visualizations/`:
 ## Requirements
 
 - Python 3.10, PyTorch 2.x + torchvision (CUDA build recommended but CPU works).
-- `numpy`, `matplotlib`, `tqdm`.
-- [Git LFS](https://git-lfs.com/) to fetch the checkpoint (`git lfs install` once per machine, then a normal `git clone`/`git pull` fetches it automatically).
+- `numpy`, `matplotlib`, `tqdm`; `--filter` / `galaxy_filter.py` also need `torchvision` (for the DenseNet121 backbone).
+- [Git LFS](https://git-lfs.com/) to fetch the checkpoints (`netG_104.pth` and the `filter_models/*.pt` used by
+  `--filter`; `git lfs install` once per machine, then a normal `git clone`/`git pull` fetches them automatically).
 - A trained checkpoint under `saved_info/dd_gan/<dataset>/<exp>/netG_<epoch_id>.pth`. Only
   `netG_104.pth` (under `experiment_latest_hasti_60k_high_res_snap43_removed`) is the supported
   checkpoint for this repo (~569MB, intended to be tracked via Git LFS); other checkpoints are
@@ -137,6 +138,55 @@ The normalization stats must also match the checkpoint: `netG_104.pth` was train
 | `--image_size`, `--num_timesteps`, model architecture flags | Must match the values used at training time for the chosen checkpoint. |
 
 Run `python test_generation_2_channel.py --help` for the full list of options.
+
+## Filtering unrealistic galaxies (`galaxy_filter.py`)
+
+In sparsely sampled parts of parameter space the generator can return galaxies
+that do not look like real galaxies with the requested parameters. For example,
+at `z=1.5, logM*=11.57, SFR=1.3, logL_Halpha=6.66` (a massive, quiescent galaxy;
+only ~6 of the 60,305 training galaxies are like it) real galaxies are smooth
+ellipticals, but the generator produces a patchy continuum that runs to the
+image edges and a spurious ring of H-alpha clumps.
+
+The filter runs the regression ensemble from the paper (4 DualBranchDenseNets
+trained on the real TNG-50 images) on each generated image and predicts
+`logM*`, `log SFR` and `logL_Halpha`. The **fidelity score** is the RMS
+difference between predicted and requested values, each in units of the
+ensemble's error on real test images (`z` is left out: it cannot be recovered
+even from real images). Real test images score ~1.5 on average; samples with
+fidelity above `--filter_threshold` (default 4.0) are rejected. With
+`netG_104`, every sample at the parameters above scores 4.2–7.3 and is
+rejected, while ~1% of samples conditioned on random training rows are.
+
+Needs the four ensemble checkpoints (`densenet_member{0..3}_seed{41,42,100,137}.pt`,
+~57 MB each, tracked via Git LFS) in `filter_models/`.
+
+During generation (rejected rows go to `<output_dir>/rejected/`, and every
+score to `<output_dir>/filter_results.csv`):
+
+```bash
+python test_generation_2_channel.py ... --filter --filter_retries 2
+```
+
+`--filter_retries N` redraws the noise up to N times for a rejected row before
+giving up. Parameters that the model cannot handle (like the example above)
+usually fail every retry.
+
+Or afterwards, on an existing output directory:
+
+```bash
+python galaxy_filter.py --gen_dir generated_continuum          # moves rejects to generated_continuum/rejected/
+python galaxy_filter.py --gen_dir generated_continuum --keep_rejected_in_place   # only writes filter_results.csv
+```
+
+From Python:
+
+```python
+from galaxy_filter import GalaxyFilter
+gf = GalaxyFilter("filter_models", threshold=4.0)
+fidelity, pred = gf.score(imgs, params)   # imgs (N, 2, 256, 256) in [0, 1]; params (N, 4) [z, logM*, SFR, logL_Halpha]
+keep = fidelity <= gf.threshold
+```
 
 ## Output layout
 
